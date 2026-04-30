@@ -7,6 +7,7 @@
 #include <future>
 #include <algorithm>
 #include <regex>
+#include <iomanip>
 
 // stl types
 #include <iostream>
