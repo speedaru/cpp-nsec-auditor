@@ -1,5 +1,6 @@
 #pragma once
 #include "pch.h"
+#include <nsec/core/RuleDefinitions.h>
 
 namespace nsec::models {
     enum class Severity : std::uint8_t {
@@ -11,7 +12,7 @@ namespace nsec::models {
     std::string_view ToString(Severity severity);
 
     struct Issue {
-        uint32_t ruleId;        // identifier of the rule that raised this issue
+        core::RuleId ruleId;    // identifier of the rule that raised this issue
         Severity severity;      // severity level
         fs::path filePath;      // path of the analysed file
         uint32_t line;          // line number where the issue was found (1-based)

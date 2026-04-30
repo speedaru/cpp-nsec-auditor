@@ -35,11 +35,11 @@ namespace nsec::models {
         
         for (const auto& issue : m_issues) {
             nlohmann::json issueJson = {
-                {"ruleId", issue.ruleId},
-                {"severity", ToString(issue.severity)},
-                {"file", issue.filePath.string()},
-                {"line", issue.line},
-                {"message", issue.message}
+                { "ruleId", static_cast<uint32_t>(issue.ruleId) },
+                { "severity", ToString(issue.severity) },
+                { "file", issue.filePath.string() },
+                { "line", issue.line },
+                { "message", issue.message }
             };
             reportJson["issues"].push_back(issueJson);
         }
