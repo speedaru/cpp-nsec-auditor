@@ -11,6 +11,7 @@ namespace nsec::core {
         
         // 250-299 complexity
         COMPLEXITY_CYCLOMATIC       = 251, // has too much stuff in function
+        COMPLEXITY_NESTING_DEPTH    = 252, // too much nesting in a function, or nesting too complex
 
         // 300-399 memory management
         MEM_C_ALLOC_USAGE           = 301, // c allocators usage (malloc etc... not just calloc)

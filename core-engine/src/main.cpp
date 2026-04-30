@@ -1,7 +1,10 @@
 #include "pch.h"
 #include <nsec/models/Report.h>
 #include <nsec/core/RuleEngine.h>
+
+// rules
 #include <nsec/rules/BannedFunctionRule.h>
+#include <nsec/rules/NestingDepthRule.h>
 
 /** @brief prints the tool usage to the console */
 void PrintUsage() {
@@ -28,11 +31,17 @@ int main(int argc, char* argv[]) {
     nsec::core::RuleEngine engine;
 
     // rule registration
+
+    // strcpy rule
     engine.AddRule(std::make_unique<nsec::rules::BannedFunctionRule>(
         "strcpy", nsec::models::Severity::Critical, "Banned function 'strcpy' detected (Buffer Overflow risk). Use 'strncpy' or 'std::string' instead."));
 
+    // sprintf rule
     engine.AddRule(std::make_unique<nsec::rules::BannedFunctionRule>(
         "sprintf", nsec::models::Severity::Warning, "Function 'sprintf' is prone to buffer overflows. Use 'snprintf' or 'std::format' (C++20)."));
+
+    // nesting depth rule (too nested and too complex)
+    engine.AddRule(std::make_unique<nsec::rules::NestingDepthRule>());
 
     // execution with timing
     std::cout << ">>> Initializing security scan on: " << fs::absolute(targetPath) << "\n";

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <regex>
 #include <iomanip>
+#include <sstream>
 
 // stl types
 #include <iostream>
@@ -15,6 +16,7 @@
 #include <string>
 #include <string_view>
 #include <mutex>
+#include <stack>
 
 // vendor
 #include <nlohmann/json.hpp>
