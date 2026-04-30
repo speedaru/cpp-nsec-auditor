@@ -18,7 +18,6 @@ namespace nsec::rules {
             for (char c : line) {
                 if (c == '{') {
                     EnterScope(ctx);
-                    printf("entered scope : %u\n", ctx.currentLineNum);
                 } 
                 else if (c == '}') {
                     ExitScope(ctx);
