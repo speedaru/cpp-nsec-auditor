@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# navigate to the root of the repository
+cd "$(git rev-parse --show-toplevel)"
+
+# function to check if a command is a valid python executable (not a windows store stub)
+is_valid_python() {
+    local cmd=$1
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        return 1
+    fi
+    # on windows, 'python' might exist but point to the microsoft store stub.
+    # if the version check fails or mentions "microsoft store", it's invalid.
+    "$cmd" --version >/dev/null 2>&1
+    return $?
+}
+
+PYTHON_EXE=""
+
+# try windows python launcher (for windows)
+if is_valid_python "py"; then
+    PYTHON_EXE="py"
+# try python3 (for linux/macos)
+elif is_valid_python "python3"; then
+    PYTHON_EXE="python3"
+# try python
+elif is_valid_python "python"; then
+    PYTHON_EXE="python"
+fi
+
+if [ -z "$PYTHON_EXE" ]; then
+    echo -e "\033[91m[CRITICAL]\033[0m Python not found or invalid stubs detected."
+    echo "Please ensure Python is installed and added to your PATH."
+    exit 1
+fi
+
+# execute the wrapper
+$PYTHON_EXE scripts/nsec_wrapper.py
+
+# capture and pass back the exit code
+RESULT=$?
+exit $RESULT

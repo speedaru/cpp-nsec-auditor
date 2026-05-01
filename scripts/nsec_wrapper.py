@@ -127,14 +127,19 @@ def run_auditor(binary_path, files):
 
     try:
         cmd = [binary_path] + files + ["--output", str(report_path)]
-        subprocess.run(cmd, capture_output=True, check=True)
+        subprocess.run(cmd, capture_output=True, check=True, text=True, env=os.environ)
         
         if report_path.exists():
             with open(report_path, "r") as f:
                 data = json.load(f)
                 return data.get("issues", [])
+    except subprocess.CalledProcessError as e:
+        Logger.critical(f"Auditor Engine Crashed (Exit Code: {e.returncode})")
+        Logger.error(f"Engine Output: {e.stderr}")
+        sys.exit(1) # CRITICAL: Stop the commit if the engine fails!
     except Exception as e:
-        Logger.error(f"Execution or parsing failed: {e}")
+        Logger.critical(f"System Error: {e}")
+        sys.exit(1)
     
     return []
 

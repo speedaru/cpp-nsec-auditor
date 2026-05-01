@@ -1,1 +1,6 @@
 ensure NestingDepth rule doesnt do duplicate reports for same deep branch
+
+Static Linking: bundle the runtime inside the binary. This makes your auditor "zero-dependency":
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
