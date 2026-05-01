@@ -1,0 +1,1 @@
+ensure NestingDepth rule doesnt do duplicate reports for same deep branch

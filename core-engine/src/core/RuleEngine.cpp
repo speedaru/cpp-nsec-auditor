@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <nsec/core/RuleEngine.h>
+#include <nsec/utils/Logger.h>
 
 namespace nsec::core {
     void RuleEngine::AddRule(std::unique_ptr<ISecurityRule> rule) {
@@ -8,33 +9,31 @@ namespace nsec::core {
         }
     }
 
-    void RuleEngine::Run(const fs::path& targetPath, models::Report& report) {
-        if (!fs::exists(targetPath)) {
-            return;
-        }
+    void RuleEngine::Run(const std::vector<fs::path>& targets, models::Report& report) {
+        std::vector<fs::path> filesToScan;
 
-        std::vector<std::future<void>> futures;
-
-        for (const auto& entry : fs::recursive_directory_iterator(targetPath)) {
-            if (!entry.is_regular_file()) continue;
-
-            const auto& path = entry.path();
-            auto ext = path.extension().string();
-            
-            std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-            if (ext == ".cpp" || ext == ".h" || ext == ".hpp" || ext == ".cc" || ext == ".cxx") {
-                // launch analysis of each file in parallel
-                futures.push_back(std::async(std::launch::async, [this, path, &report]() {
-                    this->ProcessFile(path, report);
-                }));
+        for (const auto& target : targets) {
+            if (fs::is_directory(target)) {
+                for (const auto& entry : fs::recursive_directory_iterator(target)) {
+                    if (IsSupportedFile(entry.path())) {
+                        filesToScan.push_back(entry.path());
+                    }
+                }
+            } else if (IsSupportedFile(target)) {
+                filesToScan.push_back(fs::absolute(target));
             }
         }
 
-        // wait for all threads to finish
-        for (auto& f : futures) {
-            f.get();
+        utils::Logger::Info("Starting analysis on " + std::to_string(filesToScan.size()) + " files...");
+
+        std::vector<std::future<void>> futures;
+        for (const auto& file : filesToScan) {
+            futures.push_back(std::async(std::launch::async, [this, file, &report]() {
+                this->ProcessFile(file, report);
+            }));
         }
+
+        for (auto& f : futures) f.get();
     }
 
     void RuleEngine::ProcessFile(const fs::path& filePath, models::Report& report) const {
@@ -51,5 +50,12 @@ namespace nsec::core {
         for (const auto& rule : m_rules) {
             rule->Execute(filePath, content, report);
         }
+    }
+
+    bool RuleEngine::IsSupportedFile(const fs::path& path) const {
+        if (!fs::is_regular_file(path)) return false;
+        std::string ext = path.extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        return (ext == ".cpp" || ext == ".h" || ext == ".hpp" || ext == ".cc");
     }
 }

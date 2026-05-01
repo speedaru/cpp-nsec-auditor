@@ -1,87 +1,94 @@
 #include "pch.h"
 #include <nsec/models/Report.h>
 #include <nsec/core/RuleEngine.h>
+#include <nsec/utils/Logger.h>
 
 // rules
 #include <nsec/rules/BannedFunctionRule.h>
 #include <nsec/rules/NestingDepthRule.h>
 
-/** @brief prints the tool usage to the console */
-void PrintUsage() {
-    std::cout << "nsec-audit: High-Performance Security Static Analysis Tool\n";
-    std::cout << "Usage: nsec-audit <target_path>\n";
-    std::cout << "Example: nsec-audit ./src\n";
+using namespace nsec;
+
+void RegisterRules(core::RuleEngine& engine) {
+    engine.AddRule(std::make_unique<rules::BannedFunctionRule>(
+        "strcpy", models::Severity::Critical, "Banned 'strcpy' (Overflow risk)."));
+    
+    engine.AddRule(std::make_unique<rules::BannedFunctionRule>(
+        "sprintf", models::Severity::Warning, "'sprintf' is unsafe. Use 'snprintf'."));
+    
+    engine.AddRule(std::make_unique<rules::NestingDepthRule>());
+}
+
+void ExportReport(const models::Report& report, const std::string& path) {
+    try {
+        fs::path outPath(path);
+        if (outPath.has_parent_path() && !fs::exists(outPath.parent_path())) {
+            fs::create_directories(outPath.parent_path());
+        }
+
+        std::ofstream outFile(path);
+        if (outFile.is_open()) {
+            outFile << report.ToJson().dump(4);
+            utils::Logger::Info("Report exported to: " + path);
+        } else {
+            utils::Logger::Critical("Failed to write report to: " + path);
+        }
+    } catch (const std::exception& e) {
+        utils::Logger::Critical("Export error: " + std::string(e.what()));
+    }
 }
 
 int main(int argc, char* argv[]) {
-    // cli argument parsing
     if (argc < 2) {
-        PrintUsage();
+        std::cout << "Usage: nsec-audit <paths...> [-o output.json]\n";
         return 1;
     }
 
-    fs::path targetPath = argv[1];
-    if (!fs::exists(targetPath)) {
-        std::cerr << "Error: Path '" << targetPath << "' does not exist.\n";
+    std::vector<fs::path> inputPaths;
+    std::string outputPath = "reports/audit_report.json";
+
+    // Simple Argument Parser
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if ((arg == "-o" || arg == "--output") && i + 1 < argc) {
+            outputPath = argv[++i];
+        } else {
+            if (fs::exists(arg)) {
+                inputPaths.push_back(arg);
+            } else {
+                utils::Logger::Warn("Path ignored (not found): " + arg);
+            }
+        }
+    }
+
+    if (inputPaths.empty()) {
+        utils::Logger::Critical("No valid input paths provided.");
         return 1;
     }
 
-    // initialization
-    nsec::models::Report report;
-    nsec::core::RuleEngine engine;
-
-    // rule registration
-
-    // strcpy rule
-    engine.AddRule(std::make_unique<nsec::rules::BannedFunctionRule>(
-        "strcpy", nsec::models::Severity::Critical, "Banned function 'strcpy' detected (Buffer Overflow risk). Use 'strncpy' or 'std::string' instead."));
-
-    // sprintf rule
-    engine.AddRule(std::make_unique<nsec::rules::BannedFunctionRule>(
-        "sprintf", nsec::models::Severity::Warning, "Function 'sprintf' is prone to buffer overflows. Use 'snprintf' or 'std::format' (C++20)."));
-
-    // nesting depth rule (too nested and too complex)
-    engine.AddRule(std::make_unique<nsec::rules::NestingDepthRule>());
-
-    // execution with timing
-    std::cout << ">>> Initializing security scan on: " << fs::absolute(targetPath) << "\n";
+    models::Report report;
+    core::RuleEngine engine;
     
+    RegisterRules(engine);
+
     auto start = std::chrono::high_resolution_clock::now();
     
-    engine.Run(targetPath, report);
+    engine.Run(inputPaths, report);
     
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
 
-    // console output summary
-    size_t issueCount = report.Size();
-    
+    // Summary output
     std::cout << "\n--------------------------------------------------\n";
-    std::cout << "              SCAN SUMMARY RESULTS                \n";
-    std::cout << "--------------------------------------------------\n";
-    std::cout << std::left << std::setw(25) << "Status:" << (issueCount == 0 ? "CLEAN" : "VULNERABILITIES FOUND") << "\n";
-    std::cout << std::left << std::setw(25) << "Total Issues:" << issueCount << "\n";
-    std::cout << std::left << std::setw(25) << "Execution Time:" << std::fixed << std::setprecision(3) << elapsed.count() << " seconds\n";
-    std::cout << "--------------------------------------------------\n";
-
-    if (issueCount > 0) {
-        std::cout << "Detailed findings have been exported to 'audit_report.json'.\n";
+    utils::Logger::Info("Scan Completed in " + std::to_string(elapsed.count()) + "s");
+    utils::Logger::Info("Total Issues Found: " + std::to_string(report.Size()));
+    
+    if (report.Size() > 0) {
+        utils::Logger::Warn("Security status: VULNERABLE");
     } else {
-        std::cout << "No security violations were detected in the analyzed files.\n";
+        utils::Logger::Info("Security status: CLEAN");
     }
+    std::cout << "--------------------------------------------------\n";
 
-    // json persistence
-    try {
-        std::ofstream outFile("audit_report.json");
-        if (outFile.is_open()) {
-            outFile << report.ToJson().dump(4);
-            outFile.close();
-        } else {
-            std::cerr << "Error: Could not create 'audit_report.json' for export.\n";
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Error during JSON export: " << e.what() << "\n";
-    }
-
-    return (issueCount > 0) ? 0 : 0; // return 0 as the engine completed successfully
+    ExportReport(report, outputPath);
 }

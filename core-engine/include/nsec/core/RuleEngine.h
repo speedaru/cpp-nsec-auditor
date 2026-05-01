@@ -10,11 +10,14 @@ namespace nsec::core {
         /** registers a new rule into the engine */
         void AddRule(std::unique_ptr<ISecurityRule> rule);
 
-        /** recursively scans the target path and runs all registered rules */
-        void Run(const fs::path& targetPath, models::Report& report);
+        /**
+         * @brief scans a list of specific files or a whole directory
+         */
+        void Run(const std::vector<fs::path>& targets, models::Report& report);
 
     private:
         void ProcessFile(const fs::path& filePath, models::Report& report) const;
+        bool IsSupportedFile(const fs::path& path) const;
 
     private:
         std::vector<std::unique_ptr<ISecurityRule>> m_rules;
