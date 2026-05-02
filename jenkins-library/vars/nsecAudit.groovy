@@ -52,16 +52,17 @@ def call(Map config = [:]) {
         if (isUnix) { sh "mkdir -p '${absReportDir}'" }
 
         // We point back to the workspace root for the scan path
-        dir("${workspace}/${scanPath}")
-        echo "running nsec python wrapper in ${workspace}/${scanPath}"
+        dir("${workspace}/${scanPath}") {
+            echo "running nsec python wrapper in ${workspace}/${scanPath}"
 
-        def exitCode = shellCmd(
-            script: "python3 scripts/nsec_wrapper.py",
-            returnStatus: true
-        )
+            def exitCode = shellCmd(
+                script: "python3 scripts/nsec_wrapper.py",
+                returnStatus: true
+            )
 
-        // Archive and Gatekeeper logic remains the same...
-        processResults(exitCode, relativeReport, failOnError)
+            // Archive and Gatekeeper logic remains the same...
+            processResults(exitCode, relativeReport, failOnError)
+        }
     }
 }
 
