@@ -31,6 +31,13 @@ def call(Map config = [:]) {
 
     echo "[NSEC-INFO] Initializing Security Gate in Workspace: ${workspace}"
 
+    // clone repo if doesn't exist
+    if (!fileExists(relativeTool)) {
+        echo "Auditor source missing from workspace. Fetching library source..."
+        // This clones the auditor repo specifically into a subfolder
+        sh "git clone https://github.com/speedaru/cpp-nsec-auditor nsec-auditor" 
+    }
+
     // 2. Surgical Tool Provisioning
     // We check if the binary exists before attempting a build to save CI time
     dir("${absEngineDir}/build") {
