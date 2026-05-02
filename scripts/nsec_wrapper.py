@@ -47,7 +47,7 @@ class Logger:
         print(f"\n{CLR_BLD}--- {msg} ---{CLR_RST}")
 
 def get_core_engine_dir() -> Path:
-    current_dir = Path(__file__).resolve().parent
+    current_dir = Path(__file__).resolve().parent.absolute()
     return current_dir.joinpath("core-engine")
 
 def get_project_name():
