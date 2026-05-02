@@ -56,7 +56,7 @@ def call(Map config = [:]) {
             echo "running nsec python wrapper in ${workspace}/${scanPath}"
 
             def exitCode = shellCmd(
-                script: "python3 scripts/nsec_wrapper.py",
+                script: "python3 ${relativeTool}/scripts/nsec_wrapper.py",
                 returnStatus: true
             )
 
