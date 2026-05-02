@@ -1,0 +1,16 @@
+@Library('nsec-lib') _
+
+pipeline {
+    agent any
+    stages {
+        stage('Security Audit') {
+            steps {
+                // The library now handles cloning the tool itself!
+                nsecAudit(scanPath: 'src/cpp-backend')
+            }
+        }
+        stage('Build') {
+            steps { sh "make all" }
+        }
+    }
+}

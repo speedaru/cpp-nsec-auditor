@@ -1,5 +1,5 @@
 /**
- * nsecAudit: Enterprise Security Gate
+ * nsecAudit: Security Gate
  * * implements intelligent lifecycle management:
  * - smart update: syncs source and detects core changes via git diff.
  * - conditional compilation: skips cmake if core engine sources haven't changed.
