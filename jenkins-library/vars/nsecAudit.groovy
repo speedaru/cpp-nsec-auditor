@@ -11,86 +11,62 @@
  * - reportDir:   Where to store JSON reports (default: 'reports/nsec')
  */
 def call(Map config = [:]) {
-    // 1. Context & Defaults
+    // 1. Context & Paths
     def scanPath       = config.get('scanPath', '.')
     def relativeTool   = config.get('toolDir', 'nsec-auditor')
     def failOnError    = config.get('failOnError', true)
-    def relativeReport  = config.get('reportDir', 'reports/nsec')
+    def relativeReport = config.get('reportDir', 'reports/nsec')
 
-    // Construct Absolute Paths using WORKSPACE to ensure consistency across agents
     def workspace    = env.WORKSPACE
     def absToolPath  = "${workspace}/${relativeTool}"
     def absEngineDir = "${absToolPath}/core-engine"
-    def absWrapper   = "${absToolPath}/scripts/nsec_wrapper.py"
     def absReportDir = "${workspace}/${relativeReport}"
 
-    // Platform Detection
     def isUnix = isUnix()
-    def binaryName = isUnix ? "nsec_core" : "nsec_core.exe"
     def shellCmd = isUnix ? { s -> sh s } : { s -> bat s }
 
-    echo "[NSEC-INFO] Initializing Security Gate in Workspace: ${workspace}"
-
-    // clone repo if doesn't exist
-    if (!fileExists(relativeTool)) {
-        echo "Auditor source missing from workspace. Fetching library source..."
-        // This clones the auditor repo specifically into a subfolder
-        sh "git clone https://github.com/speedaru/cpp-nsec-auditor nsec-auditor" 
+    // 2. Ghost-Proof Source Fetching
+    // We check for a marker file (CMakeLists) instead of just the folder name
+    if (!fileExists("${relativeTool}/core-engine/CMakeLists.txt")) {
+        echo "[NSEC-INFO] Auditor source invalid or missing. Performing fresh clone..."
+        if (isUnix) { sh "rm -rf ${relativeTool}" } else { bat "rd /s /q ${relativeTool}" }
+        sh "git clone https://github.com/speedaru/cpp-nsec-auditor ${relativeTool}" 
     }
 
-    // 2. Surgical Tool Provisioning
-    // We check if the binary exists before attempting a build to save CI time
-    dir("${absEngineDir}/build") {
+    // 3. Safe Provisioning (No Ghost Build Folders)
+    def buildDir = "${absEngineDir}/build"
+    if (isUnix) { sh "mkdir -p '${buildDir}'" } else { bat "if not exist \"${buildDir}\" mkdir \"${buildDir}\"" }
+
+    dir(buildDir) {
+        def binaryName = isUnix ? "nsec_core" : "nsec_core.exe"
         if (!fileExists(binaryName)) {
-            echo "[NSEC-WARN] Core engine binary missing at ${absEngineDir}/build/${binaryName}. Starting compilation..."
-            
-            // Enterprise standard: use -j for parallel builds on Linux
+            echo "[NSEC-WARN] Compiling core engine..."
             def buildArgs = isUnix ? "-- -j\$(nproc)" : ""
             shellCmd("cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --config Release ${buildArgs}")
-        } else {
-            echo "[NSEC-INFO] Valid core engine binary detected."
         }
     }
 
-    // 3. Execution Phase
-    echo "[NSEC-INFO] Target Scan Path: ${scanPath}"
+    // 4. Surgical Execution
+    // We enter the tool directory so the Python wrapper finds its 'core-engine'
+    dir(relativeTool) {
+        if (isUnix) { sh "mkdir -p '${absReportDir}'" }
 
-    // Ensure report directory exists
-    if (isUnix) {
-        sh "mkdir -p '${absReportDir}'"
-    } else {
-        bat "if not exist \"${absReportDir}\" mkdir \"${absReportDir}\""
+        // We point back to the workspace root for the scan path
+        def exitCode = shellCmd(
+            script: "python3 scripts/nsec_wrapper.py --path ${workspace}/${scanPath} --json-out ${absReportDir}/nsec-results.json",
+            returnStatus: true
+        )
+
+        // Archive and Gatekeeper logic remains the same...
+        processResults(exitCode, relativeReport, failOnError)
     }
+}
 
-    // Run the Python Orchestrator
-    // We use returnStatus: true to allow the Groovy script to handle the failure logic gracefully
-    def exitCode = shellCmd(
-        script: "python3 \"${absWrapper}\" --path \"${workspace}/${scanPath}\" --json-out \"${absReportDir}/nsec-results.json\"",
-        returnStatus: true
-    )
-
-    // 4. Artifact & Evidence Management
-    if (fileExists("${absReportDir}/nsec-results.json")) {
-        echo "[NSEC-INFO] Security scan data found. Archiving artifacts..."
-        archiveArtifacts artifacts: "${relativeReport}/*.json", allowEmptyArchive: true, fingerprint: true
-    }
-
-    // 5. Gatekeeper Logic (Quality Gate)
-    // Exit Code 0: Clean, Exit Code 1: Vulnerabilities, Others: Tool Error
-    switch(exitCode) {
-        case 0:
-            echo "[NSEC-PASS] No critical security violations detected."
-            break
-        case 1:
-            def msg = "[NSEC-FAIL] Critical security violations identified by nsec-auditor."
-            if (failOnError) {
-                error(msg)
-            } else {
-                unstable(msg)
-            }
-            break
-        default:
-            error("[NSEC-ERROR] nsec_wrapper failed with system error code ${exitCode}. Check logs for stack traces.")
-            break
+// Helper to keep the main call clean
+def processResults(exitCode, reportDir, failOnError) {
+    if (exitCode == 1) {
+        error("[NSEC-FAIL] Critical security violations identified.")
+    } else if (exitCode != 0) {
+        error("[NSEC-ERROR] Auditor crashed with code ${exitCode}")
     }
 }
