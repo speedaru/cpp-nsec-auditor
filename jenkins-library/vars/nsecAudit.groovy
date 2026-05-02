@@ -1,76 +1,139 @@
 /**
- * nsecAudit: Corporate Security Gate for Tier-1 Banking (Natixis Standard)
- * * This global variable handles the orchestration of the nsec-auditor tool.
- * It manages tool provisioning (CMake), execution (Python), and 
- * enforcement of security quality gates.
- *
- * @param config Map containing:
- * - scanPath:    Relative path to scan (default: '.')
- * - toolDir:     Relative path to nsec-auditor repo in workspace (default: 'nsec-auditor')
- * - failOnError: If true, fails the build on exit code 1 (default: true)
- * - reportDir:   Where to store JSON reports (default: 'reports/nsec')
+ * nsecAudit: Enterprise Security Gate
+ * * implements intelligent lifecycle management:
+ * - smart update: syncs source and detects core changes via git diff.
+ * - conditional compilation: skips cmake if core engine sources haven't changed.
+ * - metadata injection: passes jenkins build id and job name to the report.
+ * - build resilience: 10-minute timeout and post-failure artifact archiving.
  */
 def call(Map config = [:]) {
-    // 1. Context & Paths
+    // setup & configuration
     def scanPath       = config.get('scanPath', '.')
     def relativeTool   = config.get('toolDir', 'nsec-auditor')
     def failOnError    = config.get('failOnError', true)
     def relativeReport = config.get('reportDir', 'reports/nsec')
+    def toolRepoUrl    = 'https://github.com/speedaru/cpp-nsec-auditor'
 
-    def workspace    = env.WORKSPACE
-    def absToolPath  = "${workspace}/${relativeTool}"
-    def absEngineDir = "${absToolPath}/core-engine"
-    def absReportDir = "${workspace}/${relativeReport}"
-
-    def isUnix = isUnix()
+    def workspace      = env.WORKSPACE
+    def absToolPath    = "${workspace}/${relativeTool}"
+    def absEngineDir   = "${absToolPath}/core-engine"
+    def absReportDir   = "${workspace}/${relativeReport}"
+    
+    def isUnix   = isUnix()
     def shellCmd = isUnix ? { s -> sh s } : { s -> bat s }
+    def binary   = isUnix ? "nsec_core" : "nsec_core.exe"
 
-    // 2. Ghost-Proof Source Fetching
-    // We check for a marker file (CMakeLists) instead of just the folder name
-    if (!fileExists("${relativeTool}/core-engine/CMakeLists.txt")) {
-        echo "[NSEC-INFO] Auditor source invalid or missing. Performing fresh clone..."
-        if (isUnix) { sh "rm -rf ${relativeTool}" } else { bat "rd /s /q ${relativeTool}" }
-        sh "git clone https://github.com/speedaru/cpp-nsec-auditor ${relativeTool}" 
+    echo "[NSEC-GATE] Initializing Security Gate Orchestration..."
+
+    // ghost-proof source fetching and smart update logic
+    boolean coreChanged = false
+    
+    // check if the directory is valid (contains CMakeLists)
+    if (!fileExists("${absEngineDir}/CMakeLists.txt")) {
+        echo "[NSEC-WARN] Auditor source missing or corrupt. Performing fresh clone..."
+        dir(workspace) {
+            if (isUnix) { 
+                sh "rm -rf ${relativeTool}" 
+            } else { 
+                bat "rd /s /q ${relativeTool} 2>nul || exit 0" 
+            }
+            sh "git clone ${toolRepoUrl} ${relativeTool}"
+        }
+        coreChanged = true 
+    } else {
+        dir(absToolPath) {
+            try {
+                echo "[NSEC-INFO] Checking for auditor updates..."
+                sh "git fetch origin main"
+                
+                // detect if core-engine files changed between head and remote
+                def diffOutput = sh(
+                    script: "git diff HEAD origin/main --name-only | grep 'core-engine/' || true", 
+                    returnStdout: true
+                ).trim()
+                
+                coreChanged = !diffOutput.isEmpty()
+                sh "git merge origin/main"
+                
+                if (coreChanged) {
+                    echo "[NSEC-INFO] C++ source changes detected. Rebuild required."
+                }
+            } catch (Exception e) {
+                echo "[NSEC-ERROR] Git update failed. Performing recovery clone..."
+                dir(workspace) {
+                    if (isUnix) { sh "rm -rf ${relativeTool}" } else { bat "rd /s /q ${relativeTool}" }
+                    sh "git clone ${toolRepoUrl} ${relativeTool}"
+                }
+                coreChanged = true
+            }
+        }
     }
 
-    // 3. Safe Provisioning (No Ghost Build Folders)
+    // conditional compilation (skip if binary exists and no changes detected)
     def buildDir = "${absEngineDir}/build"
-    if (isUnix) { sh "mkdir -p '${buildDir}'" } else { bat "if not exist \"${buildDir}\" mkdir \"${buildDir}\"" }
-
     dir(buildDir) {
-        def binaryName = isUnix ? "nsec_core" : "nsec_core.exe"
-        if (!fileExists(binaryName)) {
-            echo "[NSEC-WARN] Compiling core engine..."
+        if (isUnix) { sh "mkdir -p ." } else { bat "if not exist . mkdir ." }
+        
+        boolean binaryExists = fileExists(binary)
+        if (!binaryExists || coreChanged) {
+            echo "[NSEC-INFO] Compiling engine (Reason: ${!binaryExists ? 'Missing Binary' : 'Source Changes'})..."
             def buildArgs = isUnix ? "-- -j\$(nproc)" : ""
             shellCmd("cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --config Release ${buildArgs}")
+        } else {
+            echo "[NSEC-INFO] Engine is up-to-date. Skipping build."
         }
     }
 
-    // 4. Surgical Execution
-    // We enter the tool directory so the Python wrapper finds its 'core-engine'
-    dir(relativeTool) {
-        if (isUnix) { sh "mkdir -p '${absReportDir}'" }
+    // execution phase with timeout and metadata injection
+    def exitCode = 999
+    
+    try {
+        timeout(time: 10, unit: 'MINUTES') {
+            // ensure the report directory exists before we start
+            if (isUnix) { sh "mkdir -p '${absReportDir}'" } else { bat "if not exist \"${absReportDir}\" mkdir \"${absReportDir}\"" }
 
-        // We point back to the workspace root for the scan path
-        dir("${workspace}/${scanPath}") {
-            echo "running nsec python wrapper in ${workspace}/${scanPath}"
-
-            def exitCode = shellCmd(
-                script: "python3 ${relativeTool}/scripts/nsec_wrapper.py",
+            echo "[NSEC-INFO] Running scan on: ${scanPath}"
+            
+            // invoke the python wrapper with injected build context
+            exitCode = shellCmd(
+                script: """python3 ${absToolPath}/scripts/nsec_wrapper.py \
+                            --path "${workspace}/${scanPath}" \
+                            --json-out "${absReportDir}/results.json" \
+                            --build-id "${env.BUILD_ID}" \
+                            --job-name "${env.JOB_NAME}" \
+                            --engine-path "${buildDir}/${binary}" """,
                 returnStatus: true
             )
-
-            // Archive and Gatekeeper logic remains the same...
-            processResults(exitCode, relativeReport, failOnError)
+        }
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+        echo "[NSEC-ERROR] Security scan timed out after 10 minutes."
+        throw e
+    } finally {
+        // always run even if scan failed or timed out
+        if (fileExists("${absReportDir}/results.json")) {
+            echo "[NSEC-INFO] Archiving security scan evidence..."
+            archiveArtifacts artifacts: "${relativeReport}/results.json", fingerprint: true
         }
     }
+
+    // quality gate enforcement
+    processResults(exitCode, failOnError)
 }
 
-// Helper to keep the main call clean
-def processResults(exitCode, reportDir, failOnError) {
-    if (exitCode == 1) {
-        error("[NSEC-FAIL] Critical security violations identified.")
-    } else if (exitCode != 0) {
-        error("[NSEC-ERROR] Auditor crashed with code ${exitCode}")
+/**
+ * handles exit codes and build status
+ */
+def processResults(int exitCode, boolean failOnError) {
+    if (exitCode == 0) {
+        echo "[NSEC-PASS] Security Gate Passed."
+    } else if (exitCode == 1) {
+        def msg = "[NSEC-FAIL] Critical security violations detected by nsec-auditor."
+        if (failOnError) {
+            error(msg)
+        } else {
+            unstable(msg)
+        }
+    } else {
+        error("[NSEC-ERROR] Auditor tool failed with system error code: ${exitCode}")
     }
 }
