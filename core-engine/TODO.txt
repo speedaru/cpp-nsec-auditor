@@ -1,1 +1,2 @@
-ensure NestingDepth rule doesnt do duplicate reports for same deep branch
+- ensure NestingDepth rule doesnt do duplicate reports for same deep branch
+- make it so we can configure rules from a json file

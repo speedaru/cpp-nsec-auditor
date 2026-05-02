@@ -16,6 +16,12 @@ namespace nsec::rules {
                      models::Report& report) const override;
 
     private:
+        using SourceRange = std::pair<size_t, size_t>; // represents [start, end)
+        using RangeList   = std::vector<SourceRange>; // a collection of ignored blocks
+
+        auto GetForbiddenRanges(const std::string& content) const -> RangeList;
+
+    private:
         std::string m_functionName;
         models::Severity m_severity;
         std::string m_message;
