@@ -48,7 +48,8 @@ class Logger:
 
 def get_core_engine_dir() -> Path:
     current_dir = Path(__file__).resolve().parent.absolute()
-    return current_dir.joinpath("core-engine")
+    auditor_root = current_dir.joinpath("..")
+    return auditor_root.joinpath("core-engine")
 
 def get_project_name():
     """Parses CMakeLists.txt to find the project name."""
