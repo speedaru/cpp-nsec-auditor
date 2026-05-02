@@ -52,7 +52,7 @@ def call(Map config = [:]) {
         if (isUnix) { sh "mkdir -p '${absReportDir}'" }
 
         // We point back to the workspace root for the scan path
-        dir("${workspace}/${scanPath})
+        dir("${workspace}/${scanPath}")
         echo "running nsec python wrapper in ${workspace}/${scanPath}"
 
         def exitCode = shellCmd(
