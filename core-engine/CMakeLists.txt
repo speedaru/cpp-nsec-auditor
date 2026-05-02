@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(nsec-auditor LANGUAGES CXX)
+project(nsec_core LANGUAGES CXX)
 
 # statically link libraries, because on windows it uses git bash to execute
 # git hooks and it can't find certain dlls, so we need to statically link them
