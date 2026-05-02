@@ -46,9 +46,13 @@ class Logger:
     def summary_header(msg):
         print(f"\n{CLR_BLD}--- {msg} ---{CLR_RST}")
 
+def get_core_engine_dir() -> Path:
+    current_dir = Path(__file__).resolve().parent
+    return current_dir.joinpath("core-engine")
+
 def get_project_name():
     """Parses CMakeLists.txt to find the project name."""
-    cmake_path = Path("core-engine/CMakeLists.txt")
+    cmake_path = get_core_engine_dir().joinpath("CMakeLists.txt")
     if not cmake_path.exists():
         return None
     
@@ -68,7 +72,7 @@ def find_binary(project_name):
     ext = ".exe" if os_is_windows() else ""
     target_name = f"{project_name}{ext}"
     
-    search_dir = Path("core-engine")
+    search_dir = get_core_engine_dir()
     if not search_dir.exists():
         return None
         
@@ -84,7 +88,7 @@ def check_binary_out_of_date(binary_path):
     """Compares binary timestamp against source file timestamps."""
     try:
         binary_mtime = os.path.getmtime(binary_path)
-        src_dir = Path("core-engine/src")
+        src_dir = get_core_engine_dir().joinpath("src")
         
         if not src_dir.exists():
             return
