@@ -6,11 +6,8 @@
 
 A high-performance C++ static security auditor designed for "IT for IT" productivity and DevSecOps integration. This tool demonstrates technical maturity in C++ systems programming and automated security pipelines.
 
-<p align="center">
-  <video src="assets/demo_video.mp4" width="100%" controls>
-    Your browser does not support the video tag.
-  </video>
-</p>
+## 📷 Demo video
+[![Watch demo](./assets/thumbnail.png)](./assets/showcase.mp4)
 
 ## 🚀 Overview
 
