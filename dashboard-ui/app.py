@@ -28,12 +28,6 @@ def get_all_reports():
     reports.sort(key=lambda x: x.get('metadata', {}).get('timestamp', ''), reverse=True)
     return reports
 
-# def custom_ts_to_utc(ts: str):
-#     """converts custom timestamp 20260503_142530 format to UTC timestamp: 2026-05-03T12:25:30Z"""
-#     dt = datetime.strptime(ts, "%Y%m%d_%H%M%S")
-#     dt = dt.replace(tzinfo=timezone.utc)
-#     return dt.isoformat().replace("+00:00", "Z")
-
 def calculate_metrics(all_reports, selected_project=None):
     """Aggregates security telemetry and prepares multi-build history."""
     total_builds = len(all_reports)
@@ -76,13 +70,6 @@ def calculate_metrics(all_reports, selected_project=None):
     # Prepare data for the frontend state (Build History + Violations)
     client_reports = []
     for r in all_reports:
-        # # safely extract metadata
-        # metadata = r.get('metadata', {})
-        #
-        # # convert timestamp
-        # raw_ts = metadata.get('timestamp')
-        # converted_ts = custom_ts_to_utc(raw_ts) if raw_ts else None
-
         issues = r.get('issues', [])
         client_reports.append({
             "build_id": r['metadata'].get('build_id'),
