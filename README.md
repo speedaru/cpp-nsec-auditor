@@ -151,5 +151,15 @@ When running the core engine directly, use the \--monitor flag to enable a live 
 * **What it does**: Instead of standard logging, it launches a thread-safe terminal UI that displays details about the JSON reports in the specified (or default) reports folder.  
 * **Best for**: local reports details / summary
 
+## 🛠️ Prerequisites
+
+Before building and running **cpp-nsec-auditor**, ensure your environment meets the following minimum requirements:
+
+*   **C++ Compiler**: A **C++20 compliant compiler** is required (e.g., GCC 10+, Clang 10+, or MSVC 19.28+).
+*   **Build System**: **CMake 3.15** or higher is necessary for project configuration.
+*   **Python Environment**: **Python 3.8+** must be installed to run the orchestrator wrapper and the Git hook installer.
+*   **Web Dashboard**: **Flask** is required to host the Security Intelligence Hub.
+*   **Version Control**: **Git** is essential for the **Surgical Guardrail** to identify staged files and to install pre-commit hooks.
+
 ## 📄 License
 This project is licensed under the MIT License.
