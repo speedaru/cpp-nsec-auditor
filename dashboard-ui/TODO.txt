@@ -1,0 +1,1 @@
+- can select latest builds by job name, or all jobs
