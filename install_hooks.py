@@ -6,7 +6,7 @@ import stat
 import argparse
 import re
 from pathlib import Path
-from scripts.nsec_wrapper import get_project_name, find_binary
+from scripts.nsec_wrapper import get_project_name, find_binary, get_tool_root
 
 # constants
 CLR_RED = "\033[91m"
@@ -22,7 +22,7 @@ def log_warn(msg): print(f"{CLR_YLW}[WARN]{CLR_RST} {msg}")
 def log_error(msg): print(f"{CLR_RED}[ERROR]{CLR_RST} {msg}")
 def log_bold(color, msg): print(f"{CLR_BLD}{color}{msg}{CLR_RST}")
 
-def patch_hook_content(source_content: str, wrapper_path: Path, auditor_tool_root: Path) -> str:
+def patch_hook_content(source_content: str, wrapper_path: Path) -> str:
     """
     patches the pre-commit shell script to use absolute paths and the correct --path argument
     paths are formatted according to the current OS
@@ -31,16 +31,13 @@ def patch_hook_content(source_content: str, wrapper_path: Path, auditor_tool_roo
     if platform.system() == "Windows":
         # for windows we escape \
         wrapper_str = str(wrapper_path).replace("\\", "\\\\")
-        target_str = str(auditor_tool_root).replace("\\", "\\\\")
     else:
         # standard unix paths
         wrapper_str = str(wrapper_path)
-        target_str = str(auditor_tool_root)
 
-    
     # locate the execution line template and replace with patched version
     execution_pattern = r'\$PYTHON_EXE\s+scripts/nsec_wrapper\.py'
-    patched_line = f'$PYTHON_EXE "{wrapper_str}" --path "{target_str}"'
+    patched_line = f'$PYTHON_EXE "{wrapper_str}"'
     
     new_content = re.sub(execution_pattern, patched_line, source_content)
     
@@ -51,7 +48,7 @@ def install_hook(target_repo_path: Path):
     installs the pre-commit hook into the specified target repository
     """
     # the source of the hook is relative to this script
-    auditor_tool_root = Path(__file__).parent.absolute()
+    auditor_tool_root = get_tool_root()
     hook_source_file = auditor_tool_root / "git-hooks" / "pre-commit"
     wrapper_path = auditor_tool_root / "scripts" / "nsec_wrapper.py"
     
@@ -76,7 +73,7 @@ def install_hook(target_repo_path: Path):
             content = f.read()
         
         # patch content with OS pecific paths
-        patched_content = patch_hook_content(content, wrapper_path, auditor_tool_root)
+        patched_content = patch_hook_content(content, wrapper_path)
         
         # write to destination
         git_hooks_dir.mkdir(parents=True, exist_ok=True)
@@ -101,8 +98,9 @@ def install_hook(target_repo_path: Path):
 
 def check_binary_readiness():
     """inform the user if the c++ binary is missing in the primary tool directory"""
-    project_name = get_project_name()
-    binary_path = find_binary(project_name)
+    tool_root = get_tool_root()
+    project_name = get_project_name(tool_root)
+    binary_path = find_binary(tool_root, project_name)
 
     if binary_path is None:
         SEPARATOR = "-" * 50

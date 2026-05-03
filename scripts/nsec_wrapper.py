@@ -246,15 +246,16 @@ def display_results(findings):
 
 def main():
     parser = argparse.ArgumentParser(description="nsec-auditor Enterprise Orchestrator")
-    parser.add_argument("--path", help="Explicit source dir for the auditor")
+    # parser.add_argument("--path", help="Explicit source dir for the auditor")
     parser.add_argument("--build-id", help="Jenkins/CI Build ID")
     parser.add_argument("--job-name", help="Jenkins/CI Job Name")
     parser.add_argument("--engine-path", help="Explicit path to the auditor binary")
     args = parser.parse_args()
 
-    # the current directory is the project being scanned
-    # tool_root is where the core-engine and logic reside
-    tool_root = get_tool_root(args.path)
+    # # the current directory is the project being scanned
+    # # tool_root is where the core-engine and logic reside
+    # tool_root = get_tool_root(args.path)
+    tool_root = get_tool_root() # get tool root regardless of current working dir
 
     Logger.header("nsec-auditor: Surgical Guardrail")
     Logger.info(f"Auditor Tool Root: {tool_root}")
