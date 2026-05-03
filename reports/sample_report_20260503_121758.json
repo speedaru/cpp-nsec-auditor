@@ -1,0 +1,27 @@
+{
+  "issues": [
+    {
+      "file": "/var/jenkins_home/workspace/Test-Banking-App/src/nesting_test.cpp",
+      "line": 19,
+      "message": "Deep nesting detected (Level 5). Suggestion: Use early returns or refactor into smaller functions.",
+      "ruleId": 252,
+      "severity": "Warning"
+    },
+    {
+      "file": "/var/jenkins_home/workspace/Test-Banking-App/src/nesting_test.cpp",
+      "line": 34,
+      "message": "Maintainability Risk: Deeply nested scope (Level 4) is too long (31 lines). This makes the logic hard to follow.",
+      "ruleId": 252,
+      "severity": "Warning"
+    }
+  ],
+  "summary": {
+    "status": "Vulnerable",
+    "total_issues": 2
+  },
+  "metadata": {
+    "job_name": "Test-Banking-App",
+    "build_id": "31",
+    "timestamp": "2026-05-03T12:17:58Z"
+  }
+}

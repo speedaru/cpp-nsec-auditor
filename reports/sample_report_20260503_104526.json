@@ -1,0 +1,20 @@
+{
+  "issues": [
+    {
+      "file": "/var/jenkins_home/workspace/Test-Banking-App/test.cpp",
+      "line": 1,
+      "message": "Banned 'strcpy' (Overflow risk). (Call detected: strcpy)",
+      "ruleId": 101,
+      "severity": "Critical"
+    }
+  ],
+  "summary": {
+    "status": "Vulnerable",
+    "total_issues": 1
+  },
+  "metadata": {
+    "job_name": "Test-Banking-App",
+    "build_id": "23",
+    "timestamp": "2026-05-03T10:45:26Z"
+  }
+}

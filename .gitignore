@@ -6,6 +6,7 @@
 *build/
 *x64/
 
-*reports/
+*reports/*
+!reports/sample_*
 
 *__pycache__/

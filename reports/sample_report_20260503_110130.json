@@ -1,0 +1,34 @@
+{
+  "issues": [
+    {
+      "file": "/var/jenkins_home/workspace/Test-Banking-App/src/staged_vulnerable_test.cpp",
+      "line": 17,
+      "message": "Banned 'strcpy' (Overflow risk). (Call detected: strcpy)",
+      "ruleId": 101,
+      "severity": "Critical"
+    },
+    {
+      "file": "/var/jenkins_home/workspace/Test-Banking-App/src/staged_vulnerable_test.cpp",
+      "line": 21,
+      "message": "'sprintf' is unsafe. Use 'snprintf'. (Call detected: sprintf)",
+      "ruleId": 101,
+      "severity": "Warning"
+    },
+    {
+      "file": "/var/jenkins_home/workspace/Test-Banking-App/src/staged_vulnerable_test.cpp",
+      "line": 47,
+      "message": "Deep nesting detected (Level 5). Suggestion: Use early returns or refactor into smaller functions.",
+      "ruleId": 252,
+      "severity": "Warning"
+    }
+  ],
+  "summary": {
+    "status": "Vulnerable",
+    "total_issues": 3
+  },
+  "metadata": {
+    "job_name": "Test-Banking-App",
+    "build_id": "27",
+    "timestamp": "2026-05-03T11:01:30Z"
+  }
+}
