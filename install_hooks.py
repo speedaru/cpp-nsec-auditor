@@ -4,6 +4,7 @@ import shutil
 import platform
 import stat
 import argparse
+import re
 from pathlib import Path
 from scripts.nsec_wrapper import get_project_name, find_binary
 
@@ -21,54 +22,83 @@ def log_warn(msg): print(f"{CLR_YLW}[WARN]{CLR_RST} {msg}")
 def log_error(msg): print(f"{CLR_RED}[ERROR]{CLR_RST} {msg}")
 def log_bold(color, msg): print(f"{CLR_BLD}{color}{msg}{CLR_RST}")
 
+def patch_hook_content(source_content: str, wrapper_path: Path, target_repo_path: Path) -> str:
+    """
+    patches the pre-commit shell script to use absolute paths and the correct --path argument
+    paths are formatted according to the current OS
+    """
+    # determine OS dependant path representation
+    if platform.system() == "Windows":
+        # for windows we escape \
+        wrapper_str = str(wrapper_path).replace("\\", "\\\\")
+        target_str = str(target_repo_path).replace("\\", "\\\\")
+    else:
+        # standard unix paths
+        wrapper_str = str(wrapper_path)
+        target_str = str(target_repo_path)
+    
+    # locate the execution line template and replace with patched version
+    execution_pattern = r'\$PYTHON_EXE\s+scripts/nsec_wrapper\.py'
+    patched_line = f'$PYTHON_EXE "{wrapper_str}" --path "{target_str}"'
+    
+    new_content = re.sub(execution_pattern, patched_line, source_content)
+    
+    return new_content
+
 def install_hook(target_repo_path: Path):
     """
     installs the pre-commit hook into the specified target repository
     """
     # the source of the hook is relative to this script
     script_root = Path(__file__).parent.absolute()
-    hook_source = script_root / "git-hooks" / "pre-commit"
+    hook_source_file = script_root / "git-hooks" / "pre-commit"
+    wrapper_path = script_root / "scripts" / "nsec_wrapper.py"
     
-    # the destination is relative to the target path provided by the user
     git_hooks_dir = target_repo_path / ".git" / "hooks"
     hook_dest = git_hooks_dir / "pre-commit"
 
     # environment checks
-    if not target_repo_path.exists():
-        log_error(f"Target path does not exist: {target_repo_path}")
+    if not target_repo_path.exists() or not (target_repo_path / ".git").exists():
+        log_error(f"Target is not a valid Git repository: {target_repo_path}")
         sys.exit(1)
 
-    if not (target_repo_path / ".git").exists():
-        log_error(f"Target directory is not a Git repository: {target_repo_path}")
+    if not hook_source_file.exists():
+        log_error(f"Source hook template not found: {hook_source_file}")
         sys.exit(1)
 
-    if not hook_source.exists():
-        log_error(f"Source hook not found at {hook_source}. Ensure the git-hooks/ folder exists in the script directory")
-        sys.exit(1)
-
-    # deployment
-    log_info(f"Installing hook to {hook_dest}...")
+    # patching and deployment
+    log_info(f"Patching and installing hook to {target_repo_path.name}...")
     
     try:
-        # create hooks directory if it doesn't exist
-        git_hooks_dir.mkdir(parents=True, exist_ok=True)
+        # read template
+        with open(hook_source_file, "r") as f:
+            content = f.read()
         
-        # copy the file
-        shutil.copy2(hook_source, hook_dest)
+        # patch content with OS pecific paths
+        patched_content = patch_hook_content(content, wrapper_path, target_repo_path)
+        
+        # write to destination
+        git_hooks_dir.mkdir(parents=True, exist_ok=True)
+
+        # specfiy newline to ensure we don't mess up line endings
+        with open(hook_dest, "w", newline='\n') as f: 
+            f.write(patched_content)
         
         # set execution permissions (chmod +x)
         current_stat = os.stat(hook_dest)
         os.chmod(hook_dest, current_stat.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
         
-        log_success(f"Git pre-commit hook installed successfully in: {target_repo_path.name}")
+        log_success("Hook installed with surgical path patching.")
+        log_info(f"Wrapper (OS Path): {wrapper_path}")
+        log_info(f"Target (OS Path):  {target_repo_path}")
+        
     except Exception as e:
-        log_error(f"Failed to install hook: {e}")
+        log_error(f"Failed to install/patch hook: {e}")
         sys.exit(1)
 
-    # binary readiness check (check script's local core-engine)
-    check_binary_readiness(script_root)
+    check_binary_readiness()
 
-def check_binary_readiness(script_root: Path):
+def check_binary_readiness():
     """inform the user if the c++ binary is missing in the primary tool directory"""
     project_name = get_project_name()
     binary_path = find_binary(project_name)
