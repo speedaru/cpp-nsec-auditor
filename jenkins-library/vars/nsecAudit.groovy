@@ -11,13 +11,11 @@ def call(Map config = [:]) {
     def scanPath       = config.get('scanPath', '.')
     def relativeTool   = config.get('toolDir', 'nsec-auditor')
     def failOnError    = config.get('failOnError', true)
-    def relativeReport = config.get('reportDir', 'reports/nsec')
     def toolRepoUrl    = 'https://github.com/speedaru/cpp-nsec-auditor'
 
     def workspace      = env.WORKSPACE
     def absToolPath    = "${workspace}/${relativeTool}"
     def absEngineDir   = "${absToolPath}/core-engine"
-    def absReportDir   = "${workspace}/${relativeReport}"
     
     def isUnix   = isUnix()
     def shellCmd = isUnix ? { s -> sh s } : { s -> bat s }
@@ -89,9 +87,6 @@ def call(Map config = [:]) {
     
     try {
         timeout(time: 10, unit: 'MINUTES') {
-            // ensure the report directory exists before we start
-            if (isUnix) { sh "mkdir -p '${absReportDir}'" } else { bat "if not exist \"${absReportDir}\" mkdir \"${absReportDir}\"" }
-
             echo "[NSEC-INFO] Running scan on: ${scanPath}"
             
             // invoke the python wrapper with injected build context
@@ -107,11 +102,6 @@ def call(Map config = [:]) {
         echo "[NSEC-ERROR] Security scan timed out after 10 minutes."
         throw e
     } finally {
-        // always run even if scan failed or timed out
-        if (fileExists("${absReportDir}/results.json")) {
-            echo "[NSEC-INFO] Archiving security scan evidence..."
-            archiveArtifacts artifacts: "${relativeReport}/results.json", fingerprint: true
-        }
     }
 
     // quality gate enforcement
