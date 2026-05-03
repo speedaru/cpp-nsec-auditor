@@ -22,7 +22,7 @@ def log_warn(msg): print(f"{CLR_YLW}[WARN]{CLR_RST} {msg}")
 def log_error(msg): print(f"{CLR_RED}[ERROR]{CLR_RST} {msg}")
 def log_bold(color, msg): print(f"{CLR_BLD}{color}{msg}{CLR_RST}")
 
-def patch_hook_content(source_content: str, wrapper_path: Path, target_repo_path: Path) -> str:
+def patch_hook_content(source_content: str, wrapper_path: Path, auditor_tool_root: Path) -> str:
     """
     patches the pre-commit shell script to use absolute paths and the correct --path argument
     paths are formatted according to the current OS
@@ -31,11 +31,12 @@ def patch_hook_content(source_content: str, wrapper_path: Path, target_repo_path
     if platform.system() == "Windows":
         # for windows we escape \
         wrapper_str = str(wrapper_path).replace("\\", "\\\\")
-        target_str = str(target_repo_path).replace("\\", "\\\\")
+        target_str = str(auditor_tool_root).replace("\\", "\\\\")
     else:
         # standard unix paths
         wrapper_str = str(wrapper_path)
-        target_str = str(target_repo_path)
+        target_str = str(auditor_tool_root)
+
     
     # locate the execution line template and replace with patched version
     execution_pattern = r'\$PYTHON_EXE\s+scripts/nsec_wrapper\.py'
@@ -50,9 +51,9 @@ def install_hook(target_repo_path: Path):
     installs the pre-commit hook into the specified target repository
     """
     # the source of the hook is relative to this script
-    script_root = Path(__file__).parent.absolute()
-    hook_source_file = script_root / "git-hooks" / "pre-commit"
-    wrapper_path = script_root / "scripts" / "nsec_wrapper.py"
+    auditor_tool_root = Path(__file__).parent.absolute()
+    hook_source_file = auditor_tool_root / "git-hooks" / "pre-commit"
+    wrapper_path = auditor_tool_root / "scripts" / "nsec_wrapper.py"
     
     git_hooks_dir = target_repo_path / ".git" / "hooks"
     hook_dest = git_hooks_dir / "pre-commit"
@@ -75,7 +76,7 @@ def install_hook(target_repo_path: Path):
             content = f.read()
         
         # patch content with OS pecific paths
-        patched_content = patch_hook_content(content, wrapper_path, target_repo_path)
+        patched_content = patch_hook_content(content, wrapper_path, auditor_tool_root)
         
         # write to destination
         git_hooks_dir.mkdir(parents=True, exist_ok=True)
@@ -122,7 +123,7 @@ def main():
     )
     
     args = parser.parse_args()
-    target_path = Path(args.target).absolute()
+    target_path = Path(args.target)
 
     log_bold(CLR_CYN, ">>> nsec-auditor: Pipeline Installer")
     install_hook(target_path)

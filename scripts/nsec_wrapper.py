@@ -5,6 +5,7 @@ import json
 import platform
 import re
 import argparse
+import shutil
 from pathlib import Path
 from datetime import datetime
 
@@ -47,14 +48,25 @@ class Logger:
     def summary_header(msg):
         print(f"\n{CLR_BLD}--- {msg} ---{CLR_RST}")
 
-def get_core_engine_dir() -> Path:
-    current_dir = Path(__file__).resolve().parent.absolute()
-    auditor_root = current_dir.joinpath("..")
-    return auditor_root.joinpath("core-engine")
+def get_tool_root(explicit_path=None) -> Path:
+    """
+    determines the root directory of the nsec-auditor tool.
+    if explicit_path is provided, use that.
+    otherwise, default to the parent of this script's directory.
+    """
+    if explicit_path:
+        return Path(explicit_path).resolve()
+    
+    # default: script is in [root]/scripts/nsec_wrapper.py
+    return Path(__file__).resolve().parent.parent
 
-def get_project_name():
+def get_core_engine_dir(tool_root: Path) -> Path:
+    """returns the core-engine directory relative to the tool root"""
+    return tool_root / "core-engine"
+
+def get_project_name(tool_root: Path):
     """Parses CMakeLists.txt to find the project name."""
-    cmake_path = get_core_engine_dir().joinpath("CMakeLists.txt")
+    cmake_path = get_core_engine_dir(tool_root) / "CMakeLists.txt"
     if not cmake_path.exists():
         return None
     
@@ -69,12 +81,12 @@ def os_is_windows():
     """Returns True if the current OS is Windows."""
     return platform.system() == "Windows"
 
-def find_binary(project_name):
+def find_binary(tool_root: Path, project_name):
     """Recursively searches core-engine/ for the OS-appropriate binary."""
     ext = ".exe" if os_is_windows() else ""
     target_name = f"{project_name}{ext}"
     
-    search_dir = get_core_engine_dir()
+    search_dir = get_core_engine_dir(tool_root)
     if not search_dir.exists():
         return None
         
@@ -86,11 +98,53 @@ def find_binary(project_name):
             return str(path)
     return None
 
-def check_binary_out_of_date(binary_path):
-    """Compares binary timestamp against source file timestamps."""
+def build_binary(tool_root: Path):
+    """attempts to build the core-engine using CMake"""
+    engine_dir = get_core_engine_dir(tool_root)
+    build_dir = engine_dir / "build"
+    
+    if not engine_dir.exists():
+        Logger.critical(f"Source directory {engine_dir} does not exist. Cannot build.")
+        sys.exit(1)
+
+    Logger.warn("Auditor binary missing. Attempting to build core-engine...")
+    build_dir.mkdir(exist_ok=True)
+
+    # clear CMake cache
+    cache_file = build_dir / "CMakeCache.txt"
+    if cache_file.exists():
+        Logger.info("Detecting stale CMake cache... clearing for new environment.")
+        try:
+            os.remove(cache_file)
+            cmake_files_dir = build_dir / "CMakeFiles"
+            if cmake_files_dir.exists():
+                shutil.rmtree(cmake_files_dir)
+        except Exception as e:
+            Logger.warn(f"Could not fully clear cache: {e}")
+    
+    try:
+        # configure
+        Logger.info("Configuring project with CMake...")
+        subprocess.run(["cmake", "..", "-DCMAKE_BUILD_TYPE=Release"], cwd=build_dir, check=True, capture_output=True, text=True)
+        
+        # build
+        Logger.info("Building project (Release mode)...")
+        subprocess.run(["cmake", "--build", ".", "--config", "Release"], cwd=build_dir, check=True, capture_output=True, text=True)
+        Logger.success("Build completed successfully.")
+    except subprocess.CalledProcessError as e:
+        Logger.critical("CMake build failed!")
+        Logger.error(f"STDOUT: {e.stdout}")
+        Logger.error(f"STDERR: {e.stderr}")
+        sys.exit(1)
+    except FileNotFoundError:
+        Logger.critical("CMake command not found. Please ensure CMake is installed and in your PATH.")
+        sys.exit(1)
+
+def check_binary_out_of_date(tool_root: Path, binary_path):
+    """compares binary timestamp against source file timestamps"""
     try:
         binary_mtime = os.path.getmtime(binary_path)
-        src_dir = get_core_engine_dir().joinpath("src")
+        src_dir = get_core_engine_dir(tool_root) / "src"
         
         if not src_dir.exists():
             return
@@ -107,10 +161,10 @@ def check_binary_out_of_date(binary_path):
         if latest_src_mtime > binary_mtime:
             Logger.info("Auditor binary might be out of date. Consider rebuilding core-engine.")
     except Exception:
-        pass # DX features should not crash the script
+        pass # dont crash the script
 
 def get_staged_files():
-    """Returns a list of C++ files currently staged in Git."""
+    """queries git for staged C++ files in the CURRENT WORKING DIRECTORY"""
     try:
         cmd = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -192,27 +246,21 @@ def display_results(findings):
 
 def main():
     parser = argparse.ArgumentParser(description="nsec-auditor Enterprise Orchestrator")
-    parser.add_argument("--path", help="Explicit source dir")
+    parser.add_argument("--path", help="Explicit source dir for the auditor")
     parser.add_argument("--build-id", help="Jenkins/CI Build ID")
     parser.add_argument("--job-name", help="Jenkins/CI Job Name")
     parser.add_argument("--engine-path", help="Explicit path to the auditor binary")
     args = parser.parse_args()
 
-    # environment guard
-    if not os.path.exists(".git"):
-        Logger.critical("Execution error: Script must be run from the project root.")
-        sys.exit(1)
+    # the current directory is the project being scanned
+    # tool_root is where the core-engine and logic reside
+    tool_root = get_tool_root(args.path)
 
     Logger.header("nsec-auditor: Surgical Guardrail")
+    Logger.info(f"Auditor Tool Root: {tool_root}")
+    Logger.info(f"Scanning Project:  {Path.cwd()}")
 
-    # set current path
-    if args.path:
-        path = args.path
-        if os.path.exists(path):
-            os.chdir(path)
-            Logger.info(f"Set current path to {os.getcwd()}")
-
-    # binary discovery logic
+    # binary discovery logic based on tool_root
     if args.engine_path:
         binary_path = args.engine_path
         if not os.path.exists(binary_path):
@@ -220,19 +268,27 @@ def main():
             sys.exit(1)
         Logger.info(f"Using enterprise binary: {binary_path}")
     else:
-        proj_name = get_project_name()
+        proj_name = get_project_name(tool_root)
         if not proj_name:
             Logger.error("Could not find project() name in core-engine/CMakeLists.txt")
             sys.exit(0)
 
-        binary_path = find_binary(proj_name)
-        if not binary_path:
-            Logger.error(f"Binary '{proj_name}' not found in core-engine/.")
-            sys.exit(0)
+        # attempt to find binary
+        binary_path = find_binary(tool_root, proj_name)
         
-        check_binary_out_of_date(binary_path)
+        # auto build if not found
+        if not binary_path:
+            build_binary(tool_root, )
+            # reattempt after build
+            binary_path = find_binary(tool_root, proj_name)
+            if not binary_path:
+                Logger.critical(f"Failed to find binary '{proj_name}' even after successful build attempt.")
+                sys.exit(1)
+            Logger.success(f"Discovered binary after build: {binary_path}")
+        
+        check_binary_out_of_date(tool_root, binary_path)
 
-    # file acquisition
+    # get staged files
     staged_files = get_staged_files()
     if not staged_files:
         Logger.success("No staged C++ files to analyze.")
@@ -241,11 +297,11 @@ def main():
     Logger.info(f"Analyzing {len(staged_files)} staged file(s)...")
     if args.job_name: Logger.info(f"Context: {args.job_name} (Build #{args.build_id})")
     
-    # audit execution & metadata injection
+    # run core engine and add metadata
     findings = run_auditor(binary_path, staged_files, args)
     criticals = display_results(findings)
 
-    # enforcement
+    # guardrail enforcement
     if criticals > 0:
         Logger.critical("GUARDRAIL FAILURE: High-severity violations detected.")
         sys.exit(1)
