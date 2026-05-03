@@ -255,7 +255,7 @@ def main():
     # # the current directory is the project being scanned
     # # tool_root is where the core-engine and logic reside
     # tool_root = get_tool_root(args.path)
-    tool_root = get_tool_root() # get tool root regardless of current working dirgroo
+    tool_root = get_tool_root() # get tool root regardless of current working dir
 
     Logger.header("nsec-auditor: Surgical Guardrail")
     Logger.info(f"Auditor Tool Root: {tool_root}")
