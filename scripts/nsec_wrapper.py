@@ -7,7 +7,7 @@ import re
 import argparse
 import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 # ANSI constants
 CLR_RED = "\033[91m"
@@ -181,7 +181,7 @@ def run_auditor(binary_path, files, args):
     report_dir = Path("reports")
     report_dir.mkdir(exist_ok=True)
     
-    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     report_path = report_dir / f"report_{timestamp_str}.json"
 
     try:
