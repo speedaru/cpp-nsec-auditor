@@ -182,7 +182,7 @@ def run_auditor(binary_path, files, args):
     report_dir.mkdir(exist_ok=True)
     
     timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    report_path = report_dir / f"report_{timestamp_str}.json"
+    report_path = report_dir / f"report_{timestamp_str}_UTC.json"
 
     try:
         # execute core engine
