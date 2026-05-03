@@ -9,7 +9,7 @@
 def call(Map config = [:]) {
     // setup & configuration
     def scanPath       = config.get('scanPath', '.')
-    def relativeTool   = config.get('toolDir', 'nsec-auditor')
+    def relativeTool   = config.get('toolDir', 'cpp-nsec-auditor')
     def failOnError    = config.get('failOnError', true)
     def toolRepoUrl    = 'https://github.com/speedaru/cpp-nsec-auditor'
 
