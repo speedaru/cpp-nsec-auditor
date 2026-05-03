@@ -4,6 +4,7 @@ import subprocess
 import json
 import platform
 import re
+import argparse
 from pathlib import Path
 from datetime import datetime
 
@@ -121,29 +122,43 @@ def get_staged_files():
         Logger.error("Failed to query Git staged files.")
         return []
 
-def run_auditor(binary_path, files):
-    """Executes the auditor and parses the resulting JSON report."""
+def run_auditor(binary_path, files, args):
+    """executes the auditor, injects metadata, and parses results"""
     report_dir = Path("reports")
     report_dir.mkdir(exist_ok=True)
     
-    # generate timestamped filename: report_YYYYMMDD_HHMMSS.json
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = report_dir / f"report_{timestamp}.json"
+    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"report_{timestamp_str}.json"
 
     try:
+        # execute core engine
         cmd = [binary_path] + files + ["--output", str(report_path)]
         subprocess.run(cmd, capture_output=True, check=True, text=True, env=os.environ)
         
+        # inject metadata if report exists
         if report_path.exists():
             with open(report_path, "r") as f:
                 data = json.load(f)
-                return data.get("issues", [])
+            
+            # Create Enterprise Metadata Block
+            data["metadata"] = {
+                "job_name": args.job_name if args.job_name else "local-dev",
+                "build_id": args.build_id if args.build_id else "manual",
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+
+            # write updated report back to disk
+            with open(report_path, "w") as f:
+                json.dump(data, f, indent=4)
+
+            return data.get("issues", [])
+            
     except subprocess.CalledProcessError as e:
         Logger.critical(f"Auditor Engine Crashed (Exit Code: {e.returncode})")
         Logger.error(f"Engine Output: {e.stderr}")
-        sys.exit(1) # CRITICAL: Stop the commit if the engine fails!
+        sys.exit(1)
     except Exception as e:
-        Logger.critical(f"System Error: {e}")
+        Logger.critical(f"System Error during execution: {e}")
         sys.exit(1)
     
     return []
@@ -176,6 +191,12 @@ def display_results(findings):
     return critical_count
 
 def main():
+    parser = argparse.ArgumentParser(description="nsec-auditor Enterprise Orchestrator")
+    parser.add_argument("--build-id", help="Jenkins/CI Build ID")
+    parser.add_argument("--job-name", help="Jenkins/CI Job Name")
+    parser.add_argument("--engine-path", help="Explicit path to the auditor binary")
+    args = parser.parse_args()
+
     # environment guard
     if not os.path.exists(".git"):
         Logger.critical("Execution error: Script must be run from the project root.")
@@ -183,37 +204,45 @@ def main():
 
     Logger.header("nsec-auditor: Surgical Guardrail")
 
-    # binary discovery
-    proj_name = get_project_name()
-    if not proj_name:
-        Logger.error("Could not find project() name in core-engine/CMakeLists.txt")
-        sys.exit(0)
+    # binary discovery logic
+    if args.engine_path:
+        binary_path = args.engine_path
+        if not os.path.exists(binary_path):
+            Logger.critical(f"Explicit engine path not found: {binary_path}")
+            sys.exit(1)
+        Logger.info(f"Using enterprise binary: {binary_path}")
+    else:
+        proj_name = get_project_name()
+        if not proj_name:
+            Logger.error("Could not find project() name in core-engine/CMakeLists.txt")
+            sys.exit(0)
 
-    binary_path = find_binary(proj_name)
-    if not binary_path:
-        Logger.error(f"Binary '{proj_name}' not found in core-engine/.")
-        sys.exit(0)
+        binary_path = find_binary(proj_name)
+        if not binary_path:
+            Logger.error(f"Binary '{proj_name}' not found in core-engine/.")
+            sys.exit(0)
+        
+        check_binary_out_of_date(binary_path)
 
-    check_binary_out_of_date(binary_path)
-
-    # file filtering
+    # file acquisition
     staged_files = get_staged_files()
     if not staged_files:
         Logger.success("No staged C++ files to analyze.")
         sys.exit(0)
 
     Logger.info(f"Analyzing {len(staged_files)} staged file(s)...")
+    if args.job_name: Logger.info(f"Context: {args.job_name} (Build #{args.build_id})")
     
-    # audit execution & reporting
-    findings = run_auditor(binary_path, staged_files)
+    # audit execution & metadata injection
+    findings = run_auditor(binary_path, staged_files, args)
     criticals = display_results(findings)
 
     # enforcement
     if criticals > 0:
-        Logger.critical("GUARDRAIL FAILURE: Commit blocked.")
+        Logger.critical("GUARDRAIL FAILURE: High-severity violations detected.")
         sys.exit(1)
     
-    Logger.success("GUARDRAIL PASSED: Ready to commit.")
+    Logger.success("GUARDRAIL PASSED: All checks successful.")
     sys.exit(0)
 
 if __name__ == "__main__":
