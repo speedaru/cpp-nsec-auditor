@@ -67,21 +67,6 @@ def call(Map config = [:]) {
         }
     }
 
-    // conditional compilation (skip if binary exists and no changes detected)
-    def buildDir = "${absEngineDir}/build"
-    dir(buildDir) {
-        if (isUnix) { sh "mkdir -p ." } else { bat "if not exist . mkdir ." }
-        
-        boolean binaryExists = fileExists(binary)
-        if (!binaryExists || coreChanged) {
-            echo "[NSEC-INFO] Compiling engine (Reason: ${!binaryExists ? 'Missing Binary' : 'Source Changes'})..."
-            def buildArgs = isUnix ? "-- -j\$(nproc)" : ""
-            shellCmd("cmake .. -DCMAKE_BUILD_TYPE=Release && cmake --build . --config Release ${buildArgs}")
-        } else {
-            echo "[NSEC-INFO] Engine is up-to-date. Skipping build."
-        }
-    }
-
     // execution phase with timeout and metadata injection
     def exitCode = 999
     
@@ -92,7 +77,6 @@ def call(Map config = [:]) {
             // invoke the python wrapper with injected build context
             exitCode = shellCmd(
                 script: """python3 ${absToolPath}/scripts/nsec_wrapper.py \
-                            --path "${workspace}/${scanPath}" \
                             --build-id "${env.BUILD_ID}" \
                             --job-name "${env.JOB_NAME}" """,
                 returnStatus: true
