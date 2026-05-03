@@ -107,7 +107,7 @@ This project features a production-ready **Jenkins Shared Library** (`jenkins-li
 
 ## 🛠️ CLI Reference
 
-### **The Core Engine (`nsec-audit`)**
+### **The Core Engine (`nsec_core`)**
 Located in `core-engine/build/`.
 | Argument | Type | Description |
 | :--- | :--- | :--- |
@@ -115,7 +115,7 @@ Located in `core-engine/build/`.
 | `--output, -o` | String | Path to save the structured JSON report. |
 | `--monitor` | Flag | Launches the real-time Terminal UI with progress bars. |
 
-**Example:** `./nsec-audit ./src --output reports/manual.json --monitor`
+**Example:** `./nsec_core ./src --output reports/manual.json --monitor`
 
 ### **The Orchestrator (`scripts/nsec_wrapper.py`)**
 The intelligent bridge managing Git state and auto-builds.
