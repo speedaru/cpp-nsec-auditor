@@ -198,7 +198,7 @@ def run_auditor(binary_path, files, args):
             data["metadata"] = {
                 "job_name": args.job_name if args.job_name else "local-dev",
                 "build_id": args.build_id if args.build_id else "manual",
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             }
 
             # write updated report back to disk
