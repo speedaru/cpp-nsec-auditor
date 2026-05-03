@@ -2,7 +2,7 @@ import os
 import json
 import glob
 from flask import Flask, render_template, jsonify, request
-from datetime import datetime
+from datetime import datetime, timezone
 
 app = Flask(__name__)
 
@@ -27,6 +27,12 @@ def get_all_reports():
     # Sort by timestamp descending
     reports.sort(key=lambda x: x.get('metadata', {}).get('timestamp', ''), reverse=True)
     return reports
+
+# def custom_ts_to_utc(ts: str):
+#     """converts custom timestamp 20260503_142530 format to UTC timestamp: 2026-05-03T12:25:30Z"""
+#     dt = datetime.strptime(ts, "%Y%m%d_%H%M%S")
+#     dt = dt.replace(tzinfo=timezone.utc)
+#     return dt.isoformat().replace("+00:00", "Z")
 
 def calculate_metrics(all_reports, selected_project=None):
     """Aggregates security telemetry and prepares multi-build history."""
@@ -66,15 +72,23 @@ def calculate_metrics(all_reports, selected_project=None):
             "bid": r['metadata'].get('build_id', 'N/A')
         })
 
+
     # Prepare data for the frontend state (Build History + Violations)
     client_reports = []
     for r in all_reports:
+        # # safely extract metadata
+        # metadata = r.get('metadata', {})
+        #
+        # # convert timestamp
+        # raw_ts = metadata.get('timestamp')
+        # converted_ts = custom_ts_to_utc(raw_ts) if raw_ts else None
+
         issues = r.get('issues', [])
         client_reports.append({
             "build_id": r['metadata'].get('build_id'),
             "job_name": r['metadata'].get('job_name'),
             "status": r.get('summary', {}).get('status'),
-            "timestamp": r['metadata'].get('timestamp'),
+            "timestamp": r.get('summary', {}).get('timestamp'),
             "issues": issues,
             "crit_count": sum(1 for i in issues if i.get('severity') == 'Critical'),
             "warn_count": sum(1 for i in issues if i.get('severity') == 'Warning')
