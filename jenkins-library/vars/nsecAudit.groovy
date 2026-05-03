@@ -98,7 +98,6 @@ def call(Map config = [:]) {
             exitCode = shellCmd(
                 script: """python3 ${absToolPath}/scripts/nsec_wrapper.py \
                             --path "${workspace}/${scanPath}" \
-                            --json-out "${absReportDir}/results.json" \
                             --build-id "${env.BUILD_ID}" \
                             --job-name "${env.JOB_NAME}" \
                             --engine-path "${buildDir}/${binary}" """,

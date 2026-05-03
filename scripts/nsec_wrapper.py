@@ -192,6 +192,7 @@ def display_results(findings):
 
 def main():
     parser = argparse.ArgumentParser(description="nsec-auditor Enterprise Orchestrator")
+    parser.add_argument("--path", help="Explicit source dir")
     parser.add_argument("--build-id", help="Jenkins/CI Build ID")
     parser.add_argument("--job-name", help="Jenkins/CI Job Name")
     parser.add_argument("--engine-path", help="Explicit path to the auditor binary")
@@ -203,6 +204,13 @@ def main():
         sys.exit(1)
 
     Logger.header("nsec-auditor: Surgical Guardrail")
+
+    # set current path
+    if args.path:
+        path = args.path
+        if os.path.exists(path):
+            os.chdir(path)
+            Logger.info(f"Set current path to {os.getcwd()}")
 
     # binary discovery logic
     if args.engine_path:
