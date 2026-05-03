@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSEC-AUDITOR | Enterprise Security Hub</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        :root {
+            --bg-deep: #0b0f19;
+            --bg-card: #161b27;
+            --bg-row-alt: #0f1420;
+            --bg-header: #1e293b;
+            --accent-teal: #2dd4bf;
+            --accent-teal-dark: #14b8a6;
+            --accent-amber: #fbbf24;
+            --text-label: #d1d5db;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --border-muted: #1f2937;
+        }
+
+        @keyframes fadeInRow {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-label);
+            font-family: 'Inter', system-ui, sans-serif;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .navbar {
+            background-color: var(--bg-card);
+            border-bottom: 1px solid var(--border-muted);
+            padding: 1rem 2rem;
+        }
+
+        .brand-logo { color: var(--accent-teal) !important; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; text-decoration: none; }
+
+        /* Metric Cards */
+        .stat-card { background-color: var(--bg-card); border: 1px solid var(--border-muted); border-radius: 8px; padding: 1.5rem; position: relative; }
+        .stat-label { color: var(--text-label); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; margin-bottom: 0.5rem; display: block; }
+        .stat-value { font-size: 2.2rem; font-weight: 800; line-height: 1; margin: 0; }
+        .critical-card { border-top: 3px solid var(--danger) !important; box-shadow: inset 0 3px 10px rgba(239, 68, 68, 0.05); }
+        .warning-card { border-top: 3px solid var(--accent-amber) !important; box-shadow: inset 0 3px 10px rgba(251, 191, 36, 0.05); }
+        .clean-card { border-top: 3px solid var(--accent-teal) !important; }
+        .compliance-card { border: 2px solid var(--accent-teal) !important; }
+
+        /* Grids */
+        .log-panel { background-color: var(--bg-card); border: 1px solid var(--border-muted); border-radius: 12px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .log-header-text { color: var(--text-label); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1.25rem; display: block; }
+
+        .history-scroll-container {
+            max-height: 330px;
+            overflow-y: auto;
+            padding-right: 4px;
+            position: relative;
+            border-radius: 8px;
+        }
+
+        .history-scroll-container::-webkit-scrollbar { width: 4px; }
+        .history-scroll-container::-webkit-scrollbar-thumb { background: var(--accent-teal-dark); border-radius: 10px; }
+
+        .log-table { border-collapse: separate; border-spacing: 0 6px; width: 100%; }
+        .history-scroll-container .log-table { margin-top: -6px; }
+
+        .log-table thead { position: sticky; top: 0; z-index: 20; background-color: var(--bg-card); }
+        .log-table thead tr { background-color: var(--bg-header); }
+        .log-table th { color: var(--text-label); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; padding: 1rem; border: none; }
+        .log-table thead tr th:first-child { border-radius: 8px 0 0 8px; }
+        .log-table thead tr th:last-child { border-radius: 0 8px 8px 0; }
+
+        .log-table tr td { background-color: var(--bg-deep); padding: 1rem; border-top: 1px solid transparent; border-bottom: 1px solid transparent; animation: fadeInRow 0.4s ease forwards; }
+        .log-table tr:nth-child(even) td { background-color: var(--bg-row-alt); }
+        .log-table tr td:first-child { border-left: 1px solid transparent; border-radius: 6px 0 0 6px; }
+        .log-table tr td:last-child { border-right: 1px solid transparent; border-radius: 0 6px 6px 0; }
+
+        /* Surgical Highlight Fix */
+        .clickable-row { cursor: pointer; }
+        .clickable-row:hover td { background-color: #1a202e !important; }
+        
+        .row-active td { 
+            background-color: #1a202e !important; 
+            border-top-color: var(--accent-teal) !important;
+            border-bottom-color: var(--accent-teal) !important;
+        }
+        .row-active td:first-child { border-left-color: var(--accent-teal) !important; }
+        .row-active td:last-child { border-right-color: var(--accent-teal) !important; }
+
+        .status-badge { padding: 4px 10px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; display: inline-block; min-width: 85px; text-align: center; }
+        .bg-vulnerable { background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid var(--danger); }
+        .bg-warning-tag { background: rgba(251, 191, 36, 0.15); color: var(--accent-amber); border: 1px solid var(--accent-amber); }
+        .bg-secure { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid var(--success); }
+
+        .file-path { color: #e2e8f0; font-family: 'Fira Code', monospace; font-size: 0.75rem; font-weight: 500; }
+        .line-number { color: var(--accent-teal); font-weight: 700; background: rgba(45, 212, 191, 0.1); padding: 2px 8px; border-radius: 4px; display: inline-block; min-width: 32px; }
+        .msg-text { color: var(--text-label); line-height: 1.5; font-size: 0.85rem; }
+        .form-select { color: var(--text-label) !important; background-color: #0d1117; border-color: var(--border-muted); }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar mb-4">
+        <div class="container-fluid px-4">
+            <a class="brand-logo" href="#"><i data-lucide="shield-check" class="me-1"></i> NSEC-AUDITOR</a>
+            <div class="badge bg-success" style="font-size: 0.6rem; letter-spacing: 1px;">REAL-TIME SYNC</div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-5">
+        <!-- Metric Grid -->
+        <div class="row g-4 mb-4">
+            <div class="col"><div class="stat-card"><span class="stat-label">Total Scans</span><p class="stat-value" id="ui-total-builds">-</p></div></div>
+            <div class="col"><div class="stat-card" id="card-latest-scan"><span class="stat-label">Latest Scan Issues</span><p class="stat-value" id="ui-latest-issues">-</p></div></div>
+            <div class="col"><div class="stat-card warning-card"><span class="stat-label" style="color: var(--accent-amber);">Total Warnings</span><p class="stat-value" style="color: var(--accent-amber);" id="ui-total-warnings">-</p></div></div>
+            <div class="col"><div class="stat-card critical-card"><span class="stat-label" style="color: var(--danger);">Critical Findings</span><p class="stat-value text-danger" id="ui-total-criticals">-</p></div></div>
+            <div class="col"><div class="stat-card compliance-card"><span class="stat-label" style="color: var(--accent-teal);">Compliance</span><p class="stat-value" style="color: var(--accent-teal);" id="ui-safety">-</p></div></div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-8">
+                <div class="stat-card h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <span class="log-header-text" style="margin:0;">Security Trend Graph</span>
+                        <select id="project-selector" class="form-select form-select-sm w-auto"></select>
+                    </div>
+                    <div style="height: 300px;"><canvas id="trend-chart"></canvas></div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="log-panel h-100">
+                    <span class="log-header-text">Build History</span>
+                    <div class="history-scroll-container">
+                        <table class="log-table">
+                            <thead><tr><th>Build</th><th>Job Name</th><th>Result</th></tr></thead>
+                            <tbody id="grid-build-history"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="log-panel">
+                    <span id="violation-header" class="log-header-text">Violations Audit Grid</span>
+                    <div class="table-responsive">
+                        <table class="log-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 140px;">Severity</th>
+                                    <th>Target File Path</th>
+                                    <th style="width: 120px; text-align: center;">Line</th>
+                                    <th>Security Violation Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="grid-violations"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const APP_STATE = { 
+            currentProject: null, 
+            chart: null, 
+            projects: [], 
+            lastDataHash: null,
+            allReports: [],
+            selectedBuildId: null 
+        };
+
+        const DESIGN_TOKENS = { teal: '#2dd4bf', amber: '#fbbf24', danger: '#ef4444', label: '#d1d5db', grid: '#161b27', border: '#1f2937' };
+
+        const RENDER_ENGINE = {
+            buildRow: (r) => {
+                // Dynamic Status Badge Logic
+                let badgeClass = 'bg-secure';
+                let badgeText = 'SECURE';
+                
+                if (r.crit_count > 0) {
+                    badgeClass = 'bg-vulnerable';
+                    badgeText = 'VULNERABLE';
+                } else if (r.warn_count > 0) {
+                    badgeClass = 'bg-warning-tag';
+                    badgeText = 'WARNINGS';
+                }
+
+                return `
+                <tr id="history-row-${r.build_id}" class="clickable-row ${APP_STATE.selectedBuildId == r.build_id ? 'row-active' : ''}" 
+                    onclick="APP_LOGIC.selectBuild('${r.build_id}')">
+                    <td>#${r.build_id}</td>
+                    <td class="small">${r.job_name}</td>
+                    <td><span class="status-badge ${badgeClass}">${badgeText}</span></td>
+                </tr>`;
+            },
+            
+            violationRow: (i) => `
+                <tr>
+                    <td><span class="status-badge ${i.severity === 'Critical' ? 'bg-vulnerable' : 'bg-warning-tag'}">${i.severity}</span></td>
+                    <td class="file-path">${i.file}</td>
+                    <td style="text-align: center;"><span class="line-number">${i.line}</span></td>
+                    <td class="msg-text">${i.message}</td>
+                </tr>`
+        };
+
+        const APP_LOGIC = {
+            selectBuild(buildId) {
+                if (APP_STATE.selectedBuildId) {
+                    const oldRow = document.getElementById(`history-row-${APP_STATE.selectedBuildId}`);
+                    if (oldRow) oldRow.classList.remove('row-active');
+                }
+                
+                APP_STATE.selectedBuildId = buildId;
+                const newRow = document.getElementById(`history-row-${buildId}`);
+                if (newRow) newRow.classList.add('row-active');
+
+                const report = APP_STATE.allReports.find(r => r.build_id == buildId);
+                if (report) {
+                    UIRenderer.renderViolations(report);
+                    UIRenderer.updateMetricCard(report);
+                }
+            }
+        };
+
+        const UIRenderer = {
+            updateMetrics(data) {
+                document.getElementById('ui-total-builds').innerText = data.total_builds;
+                document.getElementById('ui-total-warnings').innerText = data.total_warnings;
+                document.getElementById('ui-total-criticals').innerText = data.total_criticals;
+                document.getElementById('ui-safety').innerText = data.safety_percentage + '%';
+            },
+
+            updateMetricCard(activeReport) {
+                if (!activeReport) return;
+                const latestVal = document.getElementById('ui-latest-issues');
+                latestVal.innerText = (activeReport.issues || []).length;
+                
+                const latestCard = document.getElementById('card-latest-scan');
+                latestCard.classList.remove('critical-card', 'warning-card', 'clean-card');
+                if (activeReport.crit_count > 0) { latestCard.classList.add('critical-card'); latestVal.style.color = DESIGN_TOKENS.danger; }
+                else if (activeReport.warn_count > 0) { latestCard.classList.add('warning-card'); latestVal.style.color = DESIGN_TOKENS.amber; }
+                else { latestCard.classList.add('clean-card'); latestVal.style.color = DESIGN_TOKENS.teal; }
+            },
+
+            renderHistory(reports) {
+                document.getElementById('grid-build-history').innerHTML = reports.map(RENDER_ENGINE.buildRow).join('');
+            },
+
+            renderViolations(report) {
+                document.getElementById('violation-header').innerText = `Build #${report.build_id} Violations Audit Grid`;
+                const violationsBody = document.getElementById('grid-violations');
+                violationsBody.innerHTML = (report.issues || []).length > 0 
+                    ? report.issues.map(RENDER_ENGINE.violationRow).join('') 
+                    : '<tr><td colspan="4" class="text-center py-4 text-success">No violations found in this build.</td></tr>';
+            },
+
+            updateChart(history) {
+                if (!APP_STATE.chart || !history) return;
+                const chartData = history.map(h => ({ x: new Date(h.t.replace(' ', 'T')), y: Number(h.total), crit: Number(h.crit), warn: Number(h.warn), bid: h.bid })).filter(pt => !isNaN(pt.x.getTime())); 
+                if (chartData.length === 0) return;
+
+                const times = chartData.map(p => p.x.getTime());
+                const counts = chartData.map(p => p.y);
+                APP_STATE.chart.options.scales.x.min = new Date(Math.min(...times));
+                APP_STATE.chart.options.scales.x.max = new Date(Math.max(...times));
+                APP_STATE.chart.options.scales.y.min = Math.max(0, Math.min(...counts) - 1);
+                APP_STATE.chart.options.scales.y.max = Math.max(...counts) + 1;
+
+                APP_STATE.chart.data.datasets[0].data = chartData;
+                APP_STATE.chart.update('none'); 
+            },
+
+            syncProjectList(projects, selected) {
+                if (APP_STATE.projects.join(',') === projects.join(',')) return;
+                const selector = document.getElementById('project-selector');
+                selector.innerHTML = projects.map(p => `<option value="${p}" ${p === selected ? 'selected' : ''}>${p}</option>`).join('');
+                APP_STATE.projects = projects;
+            }
+        };
+
+        function initChart() {
+            const ctx = document.getElementById('trend-chart').getContext('2d');
+            APP_STATE.chart = new Chart(ctx, {
+                type: 'line',
+                data: { datasets: [{ label: 'Issues', data: [], borderColor: DESIGN_TOKENS.teal, backgroundColor: 'rgba(45, 212, 191, 0.05)', fill: true, tension: 0.2, pointRadius: 5, pointHoverRadius: 8, borderWidth: 2 }]},
+                options: {
+                    parsing: false, normalized: true, maintainAspectRatio: false,
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const dataPoint = APP_STATE.chart.data.datasets[0].data[elements[0].index];
+                            APP_LOGIC.selectBuild(dataPoint.bid);
+                        }
+                    },
+                    plugins: { 
+                        legend: { display: false }, 
+                        tooltip: { 
+                            backgroundColor: DESIGN_TOKENS.grid, titleColor: DESIGN_TOKENS.label, borderColor: DESIGN_TOKENS.border, borderWidth: 1, padding: 12,
+                            callbacks: { 
+                                title: (items) => `Build #${items[0].raw.bid} | ${new Date(items[0].raw.x).toLocaleString()}`,
+                                label: (c) => [`Total Issues: ${c.raw.y}`, `Criticals: ${c.raw.crit}`, `Warnings: ${c.raw.warn}`],
+                                labelColor: (c) => {
+                                    let color = DESIGN_TOKENS.teal;
+                                    if (c.raw.crit > 0) color = DESIGN_TOKENS.danger;
+                                    else if (c.raw.warn > 0) color = DESIGN_TOKENS.amber;
+                                    return { borderColor: color, backgroundColor: color, borderWidth: 2, borderRadius: 2 };
+                                }
+                            } 
+                        } 
+                    },
+                    scales: { 
+                        x: { type: 'time', time: { unit: 'day' }, grid: { display: false }, ticks: { color: DESIGN_TOKENS.label } }, 
+                        y: { beginAtZero: true, grid: { color: '#1e293b' }, ticks: { color: DESIGN_TOKENS.label, precision: 0 } } 
+                    }
+                }
+            });
+        }
+
+        async function syncLoop() {
+            try {
+                const url = APP_STATE.currentProject ? `/api/data?project=${encodeURIComponent(APP_STATE.currentProject)}` : '/api/data';
+                const res = await fetch(url);
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const hash = JSON.stringify(data);
+                if (APP_STATE.lastDataHash === hash) return;
+                APP_STATE.lastDataHash = hash;
+
+                APP_STATE.allReports = data.all_reports || [];
+                
+                if (!APP_STATE.selectedBuildId && APP_STATE.allReports.length > 0) {
+                    APP_STATE.selectedBuildId = APP_STATE.allReports[0].build_id;
+                }
+
+                UIRenderer.updateMetrics(data);
+                UIRenderer.renderHistory(APP_STATE.allReports); 
+                
+                const activeReport = APP_STATE.allReports.find(r => r.build_id == APP_STATE.selectedBuildId) || APP_STATE.allReports[0];
+                if (activeReport) {
+                    UIRenderer.renderViolations(activeReport);
+                    UIRenderer.updateMetricCard(activeReport);
+                }
+
+                UIRenderer.updateChart(data.project_history);
+                UIRenderer.syncProjectList(data.projects || [], APP_STATE.currentProject);
+            } catch (e) { console.error(e); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            initChart();
+            document.getElementById('project-selector').addEventListener('change', (e) => { APP_STATE.currentProject = e.target.value; syncLoop(); });
+            syncLoop();
+            setInterval(syncLoop, 5000);
+        });
+    </script>
+</body>
+</html>
